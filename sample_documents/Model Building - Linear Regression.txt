@@ -1,0 +1,128 @@
+MODELLING WORKFLOW
+Steps After Preprocessing/EDA — Feature Engineering through Evaluation
+The standard pipeline: EDA → Feature Engineering → Train/Test Split → Model Training → Evaluation → Iterate
+
+1. Feature Engineering
+Turning raw columns into a form a model can learn from. Models need numbers — text categories must be converted,
+and new, more informative columns are often derived from existing ones.
+
+Encoding Categorical Variables
+# One-Hot Encoding — for categories with NO natural order (region, category, etc.)
+pd.get_dummies(df, columns=['region', 'category'])
+# Creates a separate True/False column per category value
+# (e.g. region_North, region_South, region_East, region_West)
+# Label Encoding — fine ONLY for genuinely ordered categories
+from sklearn.preprocessing import LabelEncoder
+le = LabelEncoder()
+df['discount_level'] = le.fit_transform(df['discount_pct'])
+
+Note: One-hot encoding avoids implying a false order between categories. If you label-encode
+'North'=0,'South'=1,'East'=2,'West'=3, the model may wrongly assume East > South > North numerically, which has no real
+meaning.
+
+Feature Scaling
+from sklearn.preprocessing import StandardScaler
+scaler = StandardScaler()
+df[['sales_scaled','age_scaled']] = scaler.fit_transform(df[['sales_amount','customer_age']])
+
+Note: Puts features with very different natural ranges (e.g. age: 18-70 vs sales: hundreds-thousands) on the same scale,
+mean 0 / std 1. Matters most for distance-based or gradient-descent-based models (KNN, linear/logistic regression, neural
+nets); matters less for tree-based models (Decision Trees, Random Forest, XGBoost).
+
+Creating New Features
+df['price_per_unit'] = df['sales_amount'] / df['quantity']
+df['is_high_discount'] = (df['discount_pct'] >= 15).astype(int)
+
+Critical: Data Leakage
+A feature 'leaks' information about the target when it is mathematically derived from, or otherwise unfairly dependent on,
+the value you are trying to predict.
+# Target: sales_amount
+# LEAKY feature — built directly from the target:
+df['price_per_unit'] = df['sales_amount'] / df['quantity']
+
+# DO NOT use as a predictor of sales_amount!
+
+■ Watch out: Before training, ask of every feature: “would this value actually be known and available at prediction time, or is it
+derived from (or highly dependent on) the thing I'm trying to predict?” A model trained on a leaky feature can score deceptively
+well (high R²) while learning nothing genuinely useful — the score collapses the moment the leaky feature is removed. This is
+different from overfitting: leakage can inflate both train AND test scores, sometimes in confusing, inconsistent ways (e.g. test
+score unexpectedly higher than train score).
+
+2. Train/Test Split
+Training a model on ALL your data and testing on that same data cannot tell you whether it learned a real pattern or
+simply memorized the answers — like a student who memorizes last year's exact exam instead of understanding the
+material.
+from sklearn.model_selection import train_test_split
+X = df.drop(columns=['sales_amount'])
+y = df['sales_amount']
+
+# features
+# target
+
+X_train, X_test, y_train, y_test = train_test_split(
+X, y, test_size=0.2, random_state=42
+)
+
+Note: test_size=0.2 reserves 20% for testing (80/20 and 70/30 are both common). random_state=42 makes the
+random split reproducible across runs. The split must be RANDOM, not “first 80%, last 20%” — if the original data is sorted (by
+date, region, etc.), a non-random split can produce a biased, unrepresentative test set.
+
+3. Model Training
+from sklearn.linear_model import LinearRegression
+model = LinearRegression()
+model.fit(X_train, y_train)
+
+Note: .fit() does exactly what a from-scratch gradient descent loop does by hand — finds the best weights and bias that
+minimize prediction error — just far more efficiently, using matrix math instead of manual iteration.
+
+4. Evaluation
+from sklearn.metrics import mean_squared_error, r2_score
+y_pred = model.predict(X_test)
+r2_score(y_test, y_pred)
+mean_squared_error(y_test, y_pred)
+
+# or model.score(X_test, y_test)
+
+Key Metrics
+MSE (Mean Squared Error)
+- average of (actual - predicted)^2 — same loss function used in gradient descent
+- lower is better; punishes large errors more than small ones
+R² (R-squared / Coefficient of Determination)
+- proportion of variance in the target explained by the model
+- 1.0 = perfect predictions
+- 0.0 = model does no better than always predicting the average
+- negative = model is WORSE than just predicting the average every time
+
+Train vs Test Score — Diagnosing the Model
+train_score = model.score(X_train, y_train)
+test_score = model.score(X_test, y_test)
+Train HIGH, Test LOW
+Train LOW, Test LOW
+Train ~ Test, both OK
+
+-> Overfitting (memorized training noise, doesn't generalize)
+-> Underfitting (model too simple, or features lack real signal)
+-> Generalizing well
+
+Both scores oddly HIGH,
+or inconsistent
+-> Suspect DATA LEAKAGE, not overfitting — check every feature
+
+Note: A low R² is not always a failure. If EDA already showed near-zero correlations between features and the target, a low R²
+from a linear model correctly confirms that finding — the honest, correct conclusion may be “this data does not support a
+strong linear predictive model with these features,” rather than a coding mistake to chase.
+
+End-to-End Modelling Checklist
+1. Confirm EDA is complete: distributions, correlations, group patterns understood
+2. Encode categorical features (get_dummies for unordered, LabelEncoder for ordered)
+3. Scale numeric features if using a distance/gradient-based model
+4. Engineer new features that capture real signal
+5. AUDIT every feature for leakage — could it be derived from / dependent on the target?
+6. Split data: train_test_split(X, y, test_size=0.2, random_state=42)
+7. Train: model.fit(X_train, y_train)
+8. Predict: y_pred = model.predict(X_test)
+9. Evaluate: R², MSE (or accuracy/precision/recall for classification)
+10. Compare train vs test score -> diagnose overfit / underfit / leakage
+11. Iterate: revisit features, try a different model, or accept the honest result
+
+

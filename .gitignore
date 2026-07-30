@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+.next/
+out/
+npm-debug.log*
+tsconfig.tsbuildinfo
+
+# Env
+.env
+.env.local
+*.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Qdrant local storage volume
+qdrant_storage/
+
+# Backend runtime/test artifacts
+backend/uploads/
+backend/tests/test_knowledgehub.db
+*.db
+
